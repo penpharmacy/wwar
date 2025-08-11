@@ -1,220 +1,134 @@
+// script.js
 
+const dayNames = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
 
-// helper round half
-function roundHalf(x) { return Math.round(x * 2) / 2 }
+document.getElementById('calculateBtn').addEventListener('click', calculateDose);
 
-// distribute integer half-units across days (half-unit = 0.5 tablet)
-function distributeEvenly(totalHalfUnits, days) {
-  const base = Math.floor(totalHalfUnits / days);
-  let arr = Array(days).fill(base);
-  let rem = totalHalfUnits - base * days;
-  for (let i = 0; i < rem; i++) arr[i]++;
-  return arr;
-}
+function calculateDose() {
+  const mode = document.getElementById('mode').value;
+  const inr = parseFloat(document.getElementById('inr').value);
+  const bleeding = document.getElementById('bleeding').value;
+  const currentWeeklyDose = parseFloat(document.getElementById('weeklyDose').value);
+  const manualPercent = parseFloat(document.getElementById('manualPercent').value || 0) / 100;
 
-// Find best weekly combination of 3mg and 2mg half-units to match target (mg)
-function findBestCombo(target) {
-  let best = null;
-  let bestDiff = Infinity;
-  const maxHalf3 = 60;
-  const maxHalf2 = 80;
-  for (let h3 = 0; h3 <= maxHalf3; h3++) {
-    const mg3 = h3 * 1.5;
-    let rem = target - mg3;
-    if (rem < -10) continue;
-    const estH2 = Math.round(rem / 1);
-    const start = Math.max(0, estH2 - 6);
-    const end = Math.min(maxHalf2, estH2 + 6);
-    for (let h2 = start; h2 <= end; h2++) {
-      const total = mg3 + h2 * 1;
-      const diff = Math.abs(total - target);
-      if (
-        diff < bestDiff - 1e-9 ||
-        (Math.abs(diff - bestDiff) < 1e-9 && h3 > (best?.h3 || 0))
-      ) {
-        bestDiff = diff;
-        best = { h3, h2, total };
-        if (bestDiff < 0.01) return best;
-      }
-    }
-  }
-  return best;
-}
+  const resultBox = document.getElementById('output');
+  resultBox.innerHTML = '';
 
-function buildPlanHTML(title, combo, days) {
-  const h3 = combo.h3;
-  const h2 = combo.h2;
-  const total = combo.total;
-  const perDay3 = distributeEvenly(h3, 7);
-  const perDay2 = distributeEvenly(h2, 7);
-  let html = `<h4>${title} — รวม ${total.toFixed(1)} mg/สัปดาห์</h4>`;
-  html += `<table><thead><tr><th>วัน</th><th>3 mg (เม็ด)</th><th>2 mg (เม็ด)</th><th>รวม (mg)</th></tr></thead><tbody>`;
-  const dayNames = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"];
-  let weeklySum = 0;
-  for (let i = 0; i < 7; i++) {
-    const t3 = perDay3[i] / 2;
-    const t2 = perDay2[i] / 2;
-    const mg = t3 * 3 + t2 * 2;
-    weeklySum += mg;
-    html += `<tr><td>${dayNames[i]}</td><td>${
-      t3 % 1 === 0 ? t3 : t3.toFixed(1)
-    } </td><td>${t2 % 1 === 0 ? t2 : t2.toFixed(1)}</td><td>${mg.toFixed(1)}</td></tr>`;
-  }
-  html += `<tfoot><tr><th colspan="3">ยอดรวมในตาราง</th><th>${weeklySum.toFixed(
-    1
-  )} mg</th></tr></tfoot></table>`;
-  return html;
-}
-
-// ฟังก์ชันคำนวณจำนวนเม็ดรวมตามวันนัด
-function calculateTotalPills(perDay3, perDay2, followUpDays) {
-  const weeks = followUpDays / 7;
-  let total3mg = 0;
-  let total2mg = 0;
-  for (let i = 0; i < 7; i++) {
-    total3mg += perDay3[i] / 2;
-    total2mg += perDay2[i] / 2;
-  }
-  return {
-    total3mg: (total3mg * weeks).toFixed(1),
-    total2mg: (total2mg * weeks).toFixed(1),
-  };
-}
-
-document.getElementById("calcBtn").addEventListener("click", () => {
-  const inr = parseFloat(document.getElementById("inr").value);
-  const weeklyDose = parseFloat(document.getElementById("weeklyDose").value);
-  const days = parseInt(document.getElementById("days").value, 10);
-  const pillChoice = document.querySelector('input[name="pills"]:checked').value;
-  const bleed = document.querySelector('input[name="bleed"]:checked').value;
-
-  if (isNaN(inr) || isNaN(weeklyDose) || isNaN(days)) {
-    alert("กรุณากรอกข้อมูลให้ถูกต้อง");
+  if (isNaN(inr) || isNaN(currentWeeklyDose)) {
+    resultBox.innerHTML = `<div class="card">กรุณากรอกค่า INR และขนาดยาเดิมให้ครบถ้วน</div>`;
     return;
   }
 
-  let adj = { minPct: 0, maxPct: 0, avgPct: 0, note: "" };
-  if (inr < 1.5) {
-    adj.minPct = 0.1;
-    adj.maxPct = 0.2;
-    adj.avgPct = 0.15;
-    adj.note = "เพิ่มขนาดยารายสัปดาห์ 10–20%";
-  } else if (inr >= 1.5 && inr <= 1.9) {
-    adj.minPct = 0.05;
-    adj.maxPct = 0.1;
-    adj.avgPct = 0.075;
-    adj.note = "เพิ่ม 5–10% หรือพิจารณาไม่ปรับ แต่ติดตาม INR บ่อยขึ้น";
-  } else if (inr >= 2.0 && inr <= 3.0) {
-    adj.minPct = 0;
-    adj.maxPct = 0;
-    adj.avgPct = 0;
-    adj.note = "ไม่ต้องปรับยา";
-  } else if (inr >= 3.1 && inr <= 3.9) {
-    adj.minPct = -0.1;
-    adj.maxPct = -0.05;
-    adj.avgPct = -0.075;
-    adj.note = "ลดขนาดยารายสัปดาห์ 5–10%";
-  } else if (inr > 3.9 && inr < 5.0 && bleed === "no") {
-    adj.minPct = -0.1;
-    adj.maxPct = -0.1;
-    adj.avgPct = -0.1;
-    adj.note = "หยุดยา 1 วัน แล้วกลับมาเริ่มด้วยขนาดที่ลดลง 10%";
-  } else if (inr >= 5.0 && inr <= 9.0 && bleed === "no") {
-    adj.minPct = -0.2;
-    adj.maxPct = -0.2;
-    adj.avgPct = -0.2;
-    adj.note =
-      "หยุดยา 2 วัน แล้วกลับมาเริ่มด้วยขนาดที่ลดลง 20% — พิจารณาให้ Vit K1 1–2.5 mg ถ้ามีความเสี่ยงเลือดออก";
-  } else if (inr > 9.0 && bleed === "no") {
-    adj.minPct = null;
-    adj.maxPct = null;
-    adj.avgPct = null;
-    adj.note =
-      "INR > 9.0: หยุดยา ให้ Vit K1 2.5–5 mg รับประทาน และติดตาม INR อย่างใกล้ชิด — ปรึกษาแพทย์/เภสัชกรเพื่อการปรับยา";
-  }
-  if (bleed === "yes") {
-    adj.note =
-      "พบภาวะเลือดออก: ให้ Vit K1 และพิจารณาการรักษาเฉียบพลันตามข้อแนะนำทางการแพทย์";
-  }
+  let newWeeklyDose = currentWeeklyDose;
+  let advice = '';
+  let override = false;
 
-  let newRange = {};
-  if (adj.minPct === null) {
-    newRange.note =
-      "ไม่แนะนำให้คำนวณขนาดยาอัตโนมัติสำหรับ INR > 9.0 — ให้ผู้เชี่ยวชาญประเมิน";
+  if (mode === 'auto') {
+    const adj = getAdjustment(inr, bleeding);
+    advice = adj.text;
+    override = adj.override;
+    newWeeklyDose = override ? 0 : currentWeeklyDose * (1 + adj.percent);
   } else {
-    const min = weeklyDose * (1 + adj.minPct);
-    const max = weeklyDose * (1 + adj.maxPct);
-    const avg = weeklyDose * (1 + adj.avgPct);
-    newRange = {
-      min: roundHalf(min * 2) / 2,
-      max: roundHalf(max * 2) / 2,
-      avg: roundHalf(avg * 2) / 2,
-    };
+    advice = `ผู้ใช้เลือกปรับขนาดยา ${manualPercent > 0 ? '+' : ''}${manualPercent * 100}%`;
+    newWeeklyDose = currentWeeklyDose * (1 + manualPercent);
   }
 
-  const resDiv = document.getElementById("results");
-  let html = `<div class="card">`;
-  html += `<p><strong>คำแนะนำ:</strong> INR = ${inr.toFixed(2)} — ${
-    adj.note
-  }</p>`;
-  if (newRange.note) {
-    html += `<p class="note">${newRange.note}</p>`;
-  } else {
-    html += `<p>ขนาดยาใหม่ต่อสัปดาห์ (mg): <strong>${newRange.min.toFixed(
-      1
-    )} — ${newRange.max.toFixed(1)}</strong> (เฉลี่ย ${newRange.avg.toFixed(
-      1
-    )} mg)</p>`;
-    html += `<p class="small">(คำนวณเป็นช่วง: min = ${Math.round(
-      adj.minPct * 100
-    )}%, max = ${Math.round(adj.maxPct * 100)}%, avg = ${Math.round(
-    adj.avgPct * 100
-  )}%)</p>`;
-  }
-  html += `</div>`;
-  resDiv.innerHTML = html;
-  resDiv.style.display = "block";
+  const summary = document.createElement('div');
+  summary.className = 'card info';
+  summary.innerHTML = `
+    <strong>ขนาดยาใหม่:</strong> ${newWeeklyDose.toFixed(2)} mg/สัปดาห์<br>
+    <strong>เฉลี่ย:</strong> ${(newWeeklyDose / 7).toFixed(2)} mg/วัน
+  `;
+  resultBox.appendChild(summary);
 
-  const tables = document.getElementById("tables");
-  const plansDiv = document.getElementById("plans");
-  plansDiv.innerHTML = "";
+  const recommendation = document.createElement('div');
+  recommendation.className = 'card';
+  recommendation.innerHTML = `<strong>คำแนะนำ:</strong> ${advice}`;
+  resultBox.appendChild(recommendation);
 
-  if (newRange.min !== undefined) {
-    const targets = [
-      { k: "ต่ำสุด", val: newRange.min },
-      { k: "เฉลี่ย", val: newRange.avg },
-      { k: "สูงสุด", val: newRange.max },
-    ];
-    for (const t of targets) {
-      let best;
-      if (pillChoice === "3") {
-        const target = t.val;
-        const h3 = Math.round(target / 1.5);
-        best = { h3: h3, h2: 0, total: h3 * 1.5 };
-      } else if (pillChoice === "2") {
-        const target = t.val;
-        const h2 = Math.round(target / 1.0);
-        best = { h3: 0, h2: h2, total: h2 * 1.0 };
-      } else {
-        best = findBestCombo(t.val);
-      }
-      plansDiv.innerHTML += buildPlanHTML(t.k, best, days);
+  if (override) return;
 
-      // แสดงสรุปจำนวนเม็ดตามจำนวนวันนัด
-      const perDay3 = distributeEvenly(best.h3, 7);
-      const perDay2 = distributeEvenly(best.h2, 7);
-      const totals = calculateTotalPills(perDay3, perDay2, days);
+  const dailyPlan = distributeDose(newWeeklyDose);
 
-      plansDiv.innerHTML += `
-        <div style="margin-bottom:20px; background:#E3F2FD; padding:8px; border-radius:8px;">
-          <strong>สรุปจำนวนเม็ดที่ต้องจ่าย (${t.k}):</strong><br/>
-          เม็ด 3 mg: <strong>${totals.total3mg}</strong> เม็ด<br/>
-          เม็ด 2 mg: <strong>${totals.total2mg}</strong> เม็ด
-        </div>`;
+  const table = document.createElement('table');
+  table.className = 'table';
+  table.innerHTML = `
+    <tr>
+      <th>วัน</th>
+      <th>ขนาดยา</th>
+      <th>เม็ดยา</th>
+      <th>ภาพ</th>
+    </tr>
+  `;
+
+  for (let i = 0; i < dailyPlan.length; i++) {
+    const d = dailyPlan[i];
+    const row = document.createElement('tr');
+    const pills = [];
+
+    for (let p of d.pills) {
+      if (p === 2) pills.push('<span class="pill pill-2mg"></span>');
+      else if (p === 3) pills.push('<span class="pill pill-3mg"></span>');
+      else if (p === 1) pills.push('<span class="pill pill-half-2mg"></span>');
+      else if (p === 1.5) pills.push('<span class="pill pill-half-3mg"></span>');
     }
-    tables.style.display = "block";
-  } else {
-    plansDiv.innerHTML = `<div class="note">${newRange.note}</div>`;
-    tables.style.display = "block";
+
+    row.innerHTML = `
+      <td>${dayNames[i]}</td>
+      <td>${d.totalDose.toFixed(1)} mg</td>
+      <td>${pills.map(p => p.includes('pill-2mg') ? '2' : '3').join(', ')} mg</td>
+      <td><div class="day-pill">${pills.join('')}</div></td>
+    `;
+    table.appendChild(row);
   }
-};
+
+  resultBox.appendChild(table);
+}
+
+function getAdjustment(inr, bleeding) {
+  if (bleeding === 'major') {
+    return { percent: 0, text: "ให้ Vitamin K₁ 10 mg IV + FFP และ repeat ทุก 12 ชม.", override: true };
+  }
+  if (inr >= 9.0) return { percent: 0, text: "ให้ Vitamin K₁ 5–10 mg oral", override: true };
+  if (inr > 5.0) return { percent: 0, text: "หยุดยา 1–2 วัน + Vitamin K₁ 1 mg oral", override: true };
+  if (inr > 4.0) return { percent: -0.10, text: "หยุดยา 1 วัน แล้วลดขนาดยา 10%" };
+  if (inr > 3.0) return { percent: -0.075, text: "ลดขนาดยา 5–10%" };
+  if (inr >= 2.0) return { percent: 0, text: "ให้ขนาดยาเท่าเดิม" };
+  if (inr >= 1.5) return { percent: 0.075, text: "เพิ่มขนาดยา 5–10%" };
+  return { percent: 0.15, text: "เพิ่มขนาดยา 10–20%" };
+}
+
+function distributeDose(total) {
+  const dayDoses = [0, 0, 0, 0, 0, 0, 0];
+  const options = [3, 1.5, 2, 1]; // 3mg, 3mg ครึ่ง, 2mg, 2mg ครึ่ง
+  const results = [];
+
+  let remaining = total;
+
+  for (let i = 0; i < 7 && remaining > 0.9; i++) {
+    for (let p1 of options) {
+      if (p1 <= remaining + 0.1) {
+        dayDoses[i] = p1;
+        remaining -= p1;
+        break;
+      }
+    }
+  }
+
+  for (let d of dayDoses) {
+    const pills = [];
+    let left = d;
+    while (left >= 3) {
+      pills.push(3);
+      left -= 3;
+    }
+    if (left >= 1.5) {
+      pills.push(1.5); left -= 1.5;
+    } else if (left >= 1.0 && left <= 1.6) {
+      pills.push(1); left -= 1;
+    }
+    results.push({ totalDose: d, pills });
+  }
+
+  return results;
+}
