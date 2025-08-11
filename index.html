@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เครื่องคำนวณการให้ยา Warfarin</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <header>
+        <h1>เครื่องคำนวณการให้ยา Warfarin</h1>
+    </header>
+    <main>
+        <section class="form-section">
+            <label>INR ปัจจุบัน: <input type="number" step="0.1" id="inr"></label>
+            <label>ขนาดยาเดิมต่อสัปดาห์ (มก.): <input type="number" step="0.1" id="weeklyDose"></label>
+            <label>จำนวนวันนัด: <input type="number" id="days"></label>
+            <fieldset>
+                <legend>ขนาดเม็ดยาที่ใช้</legend>
+                <label><input type="radio" name="pillSize" value="3" checked> 3 mg</label>
+                <label><input type="radio" name="pillSize" value="2"> 2 mg</label>
+                <label><input type="radio" name="pillSize" value="both"> ทั้ง 2 และ 3 mg</label>
+            </fieldset>
+            <fieldset>
+                <legend>ภาวะเลือดออก</legend>
+                <label><input type="radio" name="bleeding" value="no" checked> ไม่มี</label>
+                <label><input type="radio" name="bleeding" value="yes"> มี</label>
+            </fieldset>
+            <button id="calculateBtn">คำนวณขนาดยา</button>
+        </section>
+        <section id="resultSection">
+            <h2>ผลลัพธ์</h2>
+            <div id="doseResult"></div>
+            <table id="doseTable"></table>
+        </section>
+    </main>
+    <footer>
+        <p>© 2025 Warfarin Calculator</p>
+    </footer>
+    <script src="script.js"></script>
+</body>
+</html>
