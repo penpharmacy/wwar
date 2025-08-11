@@ -126,22 +126,63 @@
       return best;
     }
 
-    function buildPlanHTML(title, combo){
-      const h3 = combo.h3; const h2 = combo.h2; const total = combo.total;
-      const perDay3 = distributeEvenly(h3,7);
-      const perDay2 = distributeEvenly(h2,7);
-      let html = `<h4>${title} — รวม ${total.toFixed(1)} mg/สัปดาห์</h4>`;
-      html += `<table><thead><tr><th>วัน</th><th>3 mg (เม็ด)</th><th>2 mg (เม็ด)</th><th>รวม (mg)</th></tr></thead><tbody>`;
-      const dayNames = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์','อาทิตย์'];
-      for(let i=0;i<7;i++){
-        const t3 = perDay3[i]/2;
-        const t2 = perDay2[i]/2;
-        const mg = t3*3 + t2*2;
-        html += `<tr><td>${dayNames[i]}</td><td>${t3 % 1 === 0 ? t3 : t3.toFixed(1)}</td><td>${t2 % 1 === 0 ? t2 : t2.toFixed(1)}</td><td>${mg.toFixed(1)}</td></tr>`;
-      }
-      html += `</tbody></table>`;
-      return html;
+  function buildPlanHTML(title, combo){
+  const h3 = combo.h3; // half units ของ 3mg (0.5 = ครึ่งเม็ด)
+  const h2 = combo.h2; // half units ของ 2mg
+  const total = combo.total;
+  const days = 7;
+
+  // แจกเม็ด 3mg และ 2mg ให้กระจายเท่าๆกัน (half units)
+  let perDay3 = distributeEvenly(h3, days);
+  let perDay2 = distributeEvenly(h2, days);
+
+  // ตรวจสอบว่าอย่างน้อย 1 วัน มียาทั้ง 3 และ 2 mg พร้อมกันหรือไม่
+  let hasBoth = false;
+  for(let i=0; i<days; i++){
+    if(perDay3[i] > 0 && perDay2[i] > 0){
+      hasBoth = true;
+      break;
     }
+  }
+
+  // ถ้าไม่มีวันไหนที่มียาทั้ง 2 ขนาดพร้อมกัน ให้ปรับวันสุดท้ายให้มียาทั้งคู่ (อย่างน้อยครึ่งเม็ด)
+  if(!hasBoth && h3 > 0 && h2 > 0){
+    // หากวันสุดท้าย 3mg เป็น 0 ให้เพิ่มเป็น 1 (ครึ่งเม็ด)
+    if(perDay3[days -1] === 0) perDay3[days -1] = 1;
+
+    // หากวันสุดท้าย 2mg เป็น 0 ให้เพิ่มเป็น 1 (ครึ่งเม็ด)
+    if(perDay2[days -1] === 0) perDay2[days -1] = 1;
+
+    // ลดวันก่อนหน้าเพื่อให้ปริมาณรวมไม่เกินเป้าหมาย
+    // ลดจากวันแรกที่มีเม็ดทั้ง 3mg หรือ 2mg > 0 (อย่างน้อยครึ่งเม็ด)
+    for(let i=0; i<days-1; i++){
+      if(perDay3[i] > 0){
+        perDay3[i] = Math.max(0, perDay3[i] - 1);
+        break;
+      }
+    }
+    for(let i=0; i<days-1; i++){
+      if(perDay2[i] > 0){
+        perDay2[i] = Math.max(0, perDay2[i] - 1);
+        break;
+      }
+    }
+  }
+
+  // สร้างตารางผลลัพธ์
+  let html = `<h4>${title} — รวม ${total.toFixed(1)} mg/สัปดาห์</h4>`;
+  html += `<table><thead><tr><th>วัน</th><th>3 mg (เม็ด)</th><th>2 mg (เม็ด)</th><th>รวม (mg)</th></tr></thead><tbody>`;
+  const dayNames = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์','อาทิตย์'];
+  for(let i=0;i<days;i++){
+    const t3 = perDay3[i]/2;
+    const t2 = perDay2[i]/2;
+    const mg = t3*3 + t2*2;
+    html += `<tr><td>${dayNames[i]}</td><td>${t3 % 1 === 0 ? t3 : t3.toFixed(1)}</td><td>${t2 % 1 === 0 ? t2 : t2.toFixed(1)}</td><td>${mg.toFixed(1)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
 
     document.getElementById('calcBtn').addEventListener('click', ()=>{
       const inr = parseFloat(document.getElementById('inr').value);
