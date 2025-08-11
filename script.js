@@ -99,36 +99,78 @@ function getAdjustment(inr, bleeding) {
 }
 
 function distributeDose(total) {
-  const dayDoses = [0, 0, 0, 0, 0, 0, 0];
-  const options = [3, 1.5, 2, 1]; // 3mg, 3mg ครึ่ง, 2mg, 2mg ครึ่ง
-  const results = [];
+  const days = 7;
+  const dose3mg = 3;
+  const dose2mg = 2;
+  
+  // จำนวนครึ่งเม็ด (half unit) = จำนวนเม็ด * 2
+  // ใช้หน่วย half unit เพราะแจกครึ่งเม็ดได้ เช่น 0.5 เม็ด = 1 half unit
+  const totalHalfUnits3mg = Math.round((total / dose3mg) * 2); // ประมาณครึ่งเม็ด 3mg ที่ควรใช้
+  const totalHalfUnits2mg = Math.round((total / dose2mg) * 2); // ประมาณครึ่งเม็ด 2mg ที่ควรใช้
 
-  let remaining = total;
+  // แต่เราต้องแจกผสม 3 mg และ 2 mg รวมกันได้ใกล้เคียง total
+  // จะใช้วิธี loop หาจำนวนครึ่งเม็ด 3mg และ 2mg ที่รวมกันใกล้ total มากที่สุด
 
-  for (let i = 0; i < 7 && remaining > 0.9; i++) {
-    for (let p1 of options) {
-      if (p1 <= remaining + 0.1) {
-        dayDoses[i] = p1;
-        remaining -= p1;
-        break;
+  let bestCombo = null;
+  let minDiff = Infinity;
+
+  // กำหนดขอบเขตจำนวนครึ่งเม็ด (0 ถึง 14 เม็ดเต็ม = 28 half units)
+  const maxHalf3 = Math.min(14 * 2, Math.floor(total / dose3mg) * 2 + 4); 
+  const maxHalf2 = Math.min(21 * 2, Math.floor(total / dose2mg) * 2 + 4);
+
+  for (let h3 = 0; h3 <= maxHalf3; h3++) {
+    for (let h2 = 0; h2 <= maxHalf2; h2++) {
+      const totalMg = (h3 / 2) * dose3mg + (h2 / 2) * dose2mg;
+      const diff = Math.abs(totalMg - total);
+      if (diff < minDiff) {
+        // ต้องตรวจสอบอย่างน้อยมีวันนึงแจกทั้ง 3mg และ 2mg พร้อมกัน (อย่างน้อยครึ่งเม็ด)
+        // 7 วันแจก ถ้าแจก 3mg ครึ่งเม็ด h3 half units, 2mg ครึ่งเม็ด h2 half units
+        // เราจะแจกเท่าๆกันก่อน (distributeEvenly) แล้วดูว่ามีวันไหนแจกพร้อมกันมั้ย
+        let perDay3 = distributeEvenly(h3, days);
+        let perDay2 = distributeEvenly(h2, days);
+
+        let hasBothDay = perDay3.some((v, i) => v > 0 && perDay2[i] > 0);
+
+        if (hasBothDay && diff < minDiff) {
+          minDiff = diff;
+          bestCombo = { h3, h2, total: totalMg };
+        }
       }
     }
   }
 
-  for (let d of dayDoses) {
-    const pills = [];
-    let left = d;
-    while (left >= 3) {
-      pills.push(3);
-      left -= 3;
-    }
-    if (left >= 1.5) {
-      pills.push(1.5); left -= 1.5;
-    } else if (left >= 1.0 && left <= 1.6) {
-      pills.push(1); left -= 1;
-    }
-    results.push({ totalDose: d, pills });
+  if (!bestCombo) {
+    // ถ้าไม่เจอแผนที่มีวันแจกทั้ง 3mg และ 2mg พร้อมกัน ให้เลือกใกล้เคียงสุดไม่สนใจเงื่อนไขนี้
+    bestCombo = { h3: totalHalfUnits3mg, h2: 0, total: totalHalfUnits3mg / 2 * dose3mg };
+  }
+
+  // แจกยา 7 วัน
+  const perDay3 = distributeEvenly(bestCombo.h3, days);
+  const perDay2 = distributeEvenly(bestCombo.h2, days);
+
+  const results = [];
+
+  for (let i = 0; i < days; i++) {
+    results.push({
+      totalDose: (perDay3[i] / 2) * dose3mg + (perDay2[i] / 2) * dose2mg,
+      pills: [
+        perDay3[i] > 0 ? (perDay3[i] / 2) : 0,
+        perDay2[i] > 0 ? (perDay2[i] / 2) : 0,
+      ].filter(x => x > 0)
+    });
   }
 
   return results;
 }
+
+// ฟังก์ชันช่วยแจกให้เท่าๆกัน
+function distributeEvenly(totalHalfUnits, days) {
+  const base = Math.floor(totalHalfUnits / days);
+  const remainder = totalHalfUnits % days;
+  const arr = Array(days).fill(base);
+  for (let i = 0; i < remainder; i++) {
+    arr[i]++;
+  }
+  return arr;
+}
+
